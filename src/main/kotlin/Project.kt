@@ -3,15 +3,15 @@ package yu17
 import HttpResponse
 import Path
 import io.netty.handler.codec.http.HttpMethod
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.async
+import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.coroutineScope
 
 class Project {
     private val types = ArrayList<Type>()
     val maps = HashMap<Path, mapFunction>()
     var liveConns = 0
+    val queue = Channel<Pair<Type, DataTree>>(capacity = 10)
+    val scope = CoroutineScope(Dispatchers.Default)
 
     inner class Type(val name: String) {
         infix fun to(other: Type): Path {
@@ -57,7 +57,21 @@ class Project {
         var localAddr: String? = null
         var proxyAddr: String? = null
         var channel: Channel<HttpResponse> = Channel()
-//        var response: HttpResponse? = null
+
+        //        var response: HttpResponse? = null
+        fun getScope(): CoroutineScope {
+            return scope
+        }
+    }
+
+    inner class mapFunctionScope {
+//        fun enqueue(resp: Deferred<DataTree>) {
+//
+//        }
+//
+//        fun enqueue(resp: DataTree) {
+//
+//        }
     }
 
     fun type(s: String): Type {
@@ -91,16 +105,35 @@ class Project {
         val scope = curlScope()
         it.invoke(scope)
         submitRequest(scope)
-        return coroutineScope {
-            async {
-                DataTree(scope.channel.receive().body)
-            }
+        return this.scope.async {
+            DataTree(scope.channel.receive().body)
         }
     }
 
-    fun start(type: Type, initData: DataTree) {
+    private suspend fun run(type: Type, data: DataTree) {
+        println("Project.run")
         maps.keys.filter { it.from == type }.forEach {
-            maps[it].invoke(mapFunctionScope(), initData)
+            try {
+                val l = maps[it]!!.invoke(mapFunctionScope(), data)
+                println(l)
+                l.forEach { e -> queue.send(Pair(it.to, e)) }
+            } catch (e: Exception) {
+                System.err.println("${it.from} to ${it.to} error: ${e.message}")
+//                System.err.print("stacktrace: ")
+//                e.printStackTrace()
+            }
+
+        }
+    }
+
+    suspend fun start(type: Type, initData: DataTree) {
+        queue.send(Pair(type, initData))
+        while (true) {
+            val p = queue.receive()
+            println("receive: $p")
+            scope.launch {
+                run(p.first, p.second)
+            }
         }
     }
 }

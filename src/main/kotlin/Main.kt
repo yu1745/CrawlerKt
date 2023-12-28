@@ -1,12 +1,13 @@
 package yu17
 
-import HttpResponse
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.util.concurrent.CountDownLatch
 
 
 fun main() {
+//    exitProcess(0)
     val p = Project()
     p.config {
 //        val A = type("A")
@@ -17,14 +18,18 @@ fun main() {
         val user = type("user")
         val post = type("post")
         user to post useMap {
-            it.jsonPathArray<List<Int>>("$.posts")?.map {
-                    curlAsync {
-                        url = "http://localhost:3000/posts/${it}"
-                    }
+            it.jsonPathArray<Int>("$.posts")?.map {
+//                println("http://localhost:3000/posts/${it}")
+                curlAsync {
+                    url = "http://localhost:3000/posts/${it}"
+                }
             }?.map {
-                it.await()
+                val rt = it.await()
+                println("await done")
+                return@map rt
             } ?: listOf()
         }
+
 //        B toMulti {
 //            D useMap {
 //                it
@@ -34,21 +39,21 @@ fun main() {
 //            }
 //        }
     }
+    val scope = CoroutineScope(Dispatchers.IO)
+    scope.launch {
+        p.start(
+            p.type("user"), DataTree(
+                """{ "id": 1, "name": "typicode","posts": [1, 2, 3] }""".toByteArray()
+            )
+        )
+    }
+    CountDownLatch(1).await()
+
 
 //    submitRequest(curlScope())
 //    CountDownLatch(1).await()
 
 }
 
-typealias mapFunction = (suspend mapFunctionScope.(DataTree) -> List<DataTree>)
+typealias mapFunction = (suspend Project.mapFunctionScope.(DataTree) -> List<DataTree>)
 
-class mapFunctionScope {
-    //    val response: DataTree? = null
-    suspend fun async(fn: suspend () -> HttpResponse): Deferred<DataTree> {
-        return coroutineScope {
-            return@coroutineScope async {
-                DataTree(fn().body)
-            }
-        }
-    }
-}
