@@ -1,7 +1,5 @@
 package yu17
 
-import HttpResponse
-import Path
 import io.netty.handler.codec.http.HttpMethod
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
@@ -10,7 +8,7 @@ class Project {
     private val types = ArrayList<Type>()
     val maps = HashMap<Path, mapFunction>()
     var liveConns = 0
-    val queue = Channel<Pair<Type, DataTree>>(capacity = 10)
+    val queue = Channel<Pair<Type, Data>>(capacity = 10)
     val scope = CoroutineScope(Dispatchers.Default)
 
     inner class Type(val name: String) {
@@ -75,10 +73,12 @@ class Project {
     }
 
     fun type(s: String): Type {
-        if (!types.contains(Type(s))) {
-            types.add(Type(s))
-        }
-        return Type(s)
+//        if (!types.contains(Type(s))) {
+//            types.add(Type(s))
+//        }
+        val t = Type(s)
+        types.add(t)
+        return t
     }
 
 
@@ -93,6 +93,10 @@ class Project {
         maps[this] = mapFunction
     }
 
+    infix fun Path.jsonMap(fn: jsonMapFunction) {
+        maps[this] = fn as mapFunction
+    }
+
     //todo 统计并发数，执行时+1，完成时-1
     suspend fun curl(it: curlScope.() -> Unit): HttpResponse {
         val scope = curlScope()
@@ -101,17 +105,17 @@ class Project {
         return scope.channel.receive()
     }
 
-    suspend fun curlAsync(it: curlScope.() -> Unit): Deferred<DataTree> {
+    suspend fun curlAsync(it: curlScope.() -> Unit): Deferred<Data> {
         val scope = curlScope()
         it.invoke(scope)
         submitRequest(scope)
         return this.scope.async {
-            DataTree(scope.channel.receive().body)
+            buildData(String(scope.channel.receive().body))
         }
     }
 
-    private suspend fun run(type: Type, data: DataTree) {
-        println("Project.run")
+    private suspend fun run(type: Type, data: Data) {
+//        println("Project.run")
         maps.keys.filter { it.from == type }.forEach {
             try {
                 val l = maps[it]!!.invoke(mapFunctionScope(), data)
@@ -126,14 +130,20 @@ class Project {
         }
     }
 
-    suspend fun start(type: Type, initData: DataTree) {
+    suspend fun start(type: Type, initData: Data) {
         queue.send(Pair(type, initData))
         while (true) {
             val p = queue.receive()
-            println("receive: $p")
+//            println("receive: $p")
             scope.launch {
                 run(p.first, p.second)
             }
         }
     }
+
+    /*suspend fun <T> Iterable<T>.curlA(it: Project.curlScope.() -> Unit): Iterable<Deferred<Data>> {
+        return this.map {
+            curlAsync(it)
+        }
+    }*/
 }

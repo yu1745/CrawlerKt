@@ -1,5 +1,8 @@
 @file:Suppress("VulnerableLibrariesLocal")
 
+import org.gradle.jvm.tasks.Jar
+
+
 plugins {
     kotlin("jvm") version "1.9.21"
 }
@@ -27,6 +30,8 @@ dependencies {
     // implementation("io.ktor:ktor-client-apache5-jvm:2.3.7")
     // https://mvnrepository.com/artifact/io.netty/netty-all
     implementation("io.netty:netty-all:4.1.101.Final")
+    // https://mvnrepository.com/artifact/org.jsoup/jsoup
+    implementation("org.jsoup:jsoup:1.17.1")
 }
 
 tasks.test {
@@ -34,4 +39,31 @@ tasks.test {
 }
 kotlin {
     jvmToolchain(21)
+}
+
+//tasks.register("fatJar", Jar::class) {
+//    /*manifest {
+//        attributes("Main-Class" to "Main")
+//    }
+//    archiveBaseName = "all-in-one-jar"
+//    duplicatesStrategy = DuplicatesStrategy.EXCLUDE*/
+////    from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
+////    from({ configurations.runtimeClasspath.get().filter { it.name.endsWith("jar") }.map { zipTree(it) } })
+//
+//
+//}
+
+tasks.register<Jar>("fatJar") {
+    manifest {
+        attributes["Main-Class"] = "yu17.MainKt"
+    }
+    archiveBaseName = "fat"
+    version = ""
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from(configurations.runtimeClasspath.get()
+        .onEach { println("add from dependencies: ${it.name}") }
+        .map { if (it.isDirectory()) it else zipTree(it) }
+    )
+    sourceSets.main.get().allSource.forEach { println("add from sources: ${it.name}") }
+    with(tasks.jar.get() as CopySpec)
 }

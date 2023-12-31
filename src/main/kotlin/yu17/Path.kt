@@ -1,3 +1,5 @@
+package yu17
+
 import yu17.Project
 
 data class Path(val from: Project.Type, val to: Project.Type) {

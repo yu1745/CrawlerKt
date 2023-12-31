@@ -1,6 +1,5 @@
 package yu17
 
-import HttpResponse
 import io.netty.bootstrap.Bootstrap
 import io.netty.buffer.Unpooled
 import io.netty.channel.*
@@ -8,22 +7,24 @@ import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.http.*
 import kotlinx.coroutines.launch
-import yu17.Project.curlScope
+import yu17.Project
 import java.net.URI
 
 val clientNioEventLoopGroup = NioEventLoopGroup()
 
 //val httpClientTriggerScope = CoroutineScope(Dispatchers.Default)
 
-class HttpResponseHandler(private val curl: curlScope) : SimpleChannelInboundHandler<FullHttpResponse>() {
+class HttpResponseHandler(private val curl: Project.curlScope) : SimpleChannelInboundHandler<FullHttpResponse>() {
     override fun channelRead0(ctx: ChannelHandlerContext, msg: FullHttpResponse) {
-        println("HttpResponseHandler.channelRead0")
+//        println("HttpResponseHandler.channelRead0")
         curl.getScope().launch {
+            val array = ByteArray(msg.content().readableBytes())
+            msg.content().readBytes(array)
             curl.channel.send(
                 HttpResponse(
                     msg.status().code(),
                     msg.headers().names().associateWith { msg.headers().getAll(it) },
-                    msg.content().array()
+                    array
                 )
             )
         }
@@ -31,7 +32,8 @@ class HttpResponseHandler(private val curl: curlScope) : SimpleChannelInboundHan
     }
 }
 
-fun submitRequest(curl: curlScope) {
+
+fun submitRequest(curl: Project.curlScope) {
     try {
         val bootstrap = Bootstrap().apply {
             group(clientNioEventLoopGroup)
@@ -59,7 +61,7 @@ fun submitRequest(curl: curlScope) {
         request.headers().apply {
 //            set(HttpHeaderNames.HOST, uri.host+":"+uri.port)
 //            set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE)
-            set("Host", uri.host+":"+uri.port)
+            set("Host", uri.host + ":" + uri.port)
             set("Connection", HttpHeaderValues.CLOSE)
 
 //            set(HttpHeaderNames.ACCEPT_ENCODING, listOf(HttpHeaderValues.GZIP, HttpHeaderValues.DEFLATE).joinToString(","))
